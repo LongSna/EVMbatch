@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { Address } from '../types';
 
@@ -14,19 +14,62 @@ export function AddressManager({
 }) {
   const [generateCount, setGenerateCount] = useState(5);
   const [importText, setImportText] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
 
-  const generateAddresses = () => {
+  // 非阻塞的地址生成函数
+  const generateAddresses = useCallback(async () => {
+    if (isGenerating) return;
+    
+    setIsGenerating(true);
+    setGenerationProgress(0);
+    
     const newAddresses: Address[] = [];
-    for (let i = 0; i < generateCount; i++) {
-      const wallet = ethers.Wallet.createRandom();
-      newAddresses.push({
-        address: wallet.address,
-        privateKey: wallet.privateKey,
-        isSelected: false
-      });
+    const batchSize = 10; // 增大批次大小，提高并行度
+    const totalBatches = Math.ceil(generateCount / batchSize);
+    
+    try {
+      for (let batch = 0; batch < totalBatches; batch++) {
+        const currentBatchSize = Math.min(batchSize, generateCount - batch * batchSize);
+        
+        // 并行处理当前批次，但分批让出主线程
+        const batchPromises = Array.from({ length: currentBatchSize }, async (_, index) => {
+          // 每5个任务让出一次主线程
+          if (index % 2 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+          }
+          
+          const wallet = ethers.Wallet.createRandom();
+          return {
+            address: wallet.address,
+            privateKey: wallet.privateKey,
+            isSelected: false
+          };
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        newAddresses.push(...batchResults);
+        
+        // 更新进度
+        const progress = ((batch + 1) / totalBatches) * 100;
+        setGenerationProgress(progress);
+        
+        // 实时更新地址列表
+        setAddresses([...addresses, ...newAddresses]);
+        
+        // 批次间短暂延迟，让UI有机会更新
+        await new Promise(resolve => setTimeout(resolve, 5));
+      }
+      
+      alert(`成功生成 ${newAddresses.length} 个地址`);
+    } catch (error) {
+      console.error('生成地址时出错:', error);
+      alert('生成地址时出错: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setIsGenerating(false);
+      setGenerationProgress(0);
     }
-    setAddresses([...addresses, ...newAddresses]);
-  };
+  }, [generateCount, addresses, setAddresses, isGenerating]);
 
   const importFromPrivateKeys = () => {
     const lines = importText.split('\n').filter(line => line.trim());
@@ -113,27 +156,24 @@ export function AddressManager({
                     isSelected: false
                   });
                 }
-              } catch {
+              } catch (error) {
                 console.error('无效的私钥:', item.privateKey);
               }
             }
           });
-          
-          if (importedAddresses.length > 0) {
-            setAddresses([...addresses, ...importedAddresses]);
-            alert(`成功导入 ${importedAddresses.length} 个地址`);
-          } else {
-            alert('JSON文件中没有找到有效的地址和私钥');
-          }
+        }
+        
+        if (importedAddresses.length > 0) {
+          setAddresses([...addresses, ...importedAddresses]);
+          alert(`成功导入 ${importedAddresses.length} 个地址`);
         } else {
-          alert('JSON格式错误，请检查文件内容');
+          alert('没有找到有效的地址数据');
         }
       } catch (error) {
-        alert('JSON文件解析失败');
-        console.error('JSON解析错误:', error);
+        console.error('解析JSON文件失败:', error);
+        alert('解析JSON文件失败');
       }
     };
-    
     reader.readAsText(file);
   };
 
@@ -175,15 +215,33 @@ export function AddressManager({
             onChange={(e) => setGenerateCount(parseInt(e.target.value) || 1)}
             className="flex-1 px-3 py-2 border rounded"
             min="1"
-            max="100"
+            max="1000"
+            disabled={isGenerating}
           />
           <button 
             onClick={generateAddresses}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            disabled={isGenerating}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
-            生成
+            {isGenerating ? '生成中...' : '生成'}
           </button>
         </div>
+        
+        {/* 进度条 */}
+        {isGenerating && (
+          <div className="mb-3">
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${generationProgress}%` }}
+              ></div>
+            </div>
+            <p className="text-sm text-gray-600 mt-1">
+              生成进度: {Math.round(generationProgress)}%
+            </p>
+          </div>
+        )}
+        
         <p className="text-sm text-gray-600">
           生成的钱包包含私钥，请妥善保管
         </p>
@@ -239,15 +297,17 @@ export function AddressManager({
           </label>
         </div>
         <p className="text-sm text-gray-600 mt-1">
-          导出包含地址和私钥的JSON文件，或从JSON文件导入
+          支持导入导出地址和私钥信息
         </p>
       </div>
 
       {/* 地址列表 */}
-      <div>
-        <h3 className="text-lg font-semibold mb-2">地址列表</h3>
-        {addresses.length > 0 && (
-          <div className="flex gap-2 mb-2">
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-semibold">
+            地址列表 ({addresses.length})
+          </h3>
+          <div className="flex gap-2">
             <button 
               onClick={selectAllAddresses}
               className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -261,38 +321,52 @@ export function AddressManager({
               取消全选
             </button>
           </div>
-        )}
-        <div className="max-h-60 overflow-y-auto border rounded">
-          {addresses.map((address, index) => (
-            <div key={index} className="flex items-center p-2 hover:bg-gray-50">
-              <input 
-                type="checkbox"
-                checked={address.isSelected}
-                onChange={() => toggleAddressSelection(index)}
-                className="mr-2"
-              />
-              <div className="flex-1">
-                <div className="text-sm font-mono">{address.address}</div>
-                {address.balance && (
-                  <div className="text-xs text-gray-500">
-                    余额: {address.balance} ETH
-                  </div>
-                )}
-                <div className="text-xs text-gray-400">
-                  私钥: {address.privateKey.substring(0, 10)}...
-                </div>
-              </div>
-              <button 
-                onClick={() => removeAddress(index)}
-                className="text-red-500 hover:text-red-700 text-sm"
-              >
-                删除
-              </button>
-            </div>
-          ))}
         </div>
-        <div className="mt-2 text-sm text-gray-600">
-          已选择: {selectedCount} / {addresses.length}
+        
+        {selectedCount > 0 && (
+          <div className="mb-2 p-2 bg-blue-50 rounded text-sm text-blue-700">
+            已选择 {selectedCount} 个地址
+          </div>
+        )}
+        
+        <div className="max-h-60 overflow-y-auto border rounded">
+          {addresses.length === 0 ? (
+            <div className="p-4 text-center text-gray-500">
+              暂无地址，请先生成或导入地址
+            </div>
+          ) : (
+            addresses.map((addr, index) => (
+              <div 
+                key={index} 
+                className={`p-3 border-b last:border-b-0 flex items-center justify-between ${
+                  addr.isSelected ? 'bg-blue-50' : ''
+                }`}
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox"
+                      checked={addr.isSelected}
+                      onChange={() => toggleAddressSelection(index)}
+                      className="mr-2"
+                    />
+                    <span className="font-mono text-sm">{addr.address}</span>
+                  </div>
+                  {addr.balance && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      余额: {addr.balance} ETH
+                    </div>
+                  )}
+                </div>
+                <button 
+                  onClick={() => removeAddress(index)}
+                  className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                >
+                  删除
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
