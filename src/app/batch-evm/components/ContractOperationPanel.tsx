@@ -197,6 +197,7 @@ export function ContractOperationPanel({
         
         // 估算gas限制
         const estimatedGas = await provider.estimateGas({
+          from: deployerAddress,
           to: contractAddress || ethers.constants.AddressZero,
           data: callData
         });
