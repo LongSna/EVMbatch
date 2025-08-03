@@ -1,3 +1,4 @@
+"use client";
 import { ethers } from 'ethers';
 import { Address, Transaction, Network } from '../types/ethereum';
 
