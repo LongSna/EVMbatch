@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // 启用SWC编译器以提升构建性能
-  swcMinify: true,
+
   
   // 启用实验性功能
   experimental: {
@@ -17,8 +16,7 @@ const nextConfig: NextConfig = {
     },
     // 启用优化字体加载和静态资源优化
     optimizePackageImports: ['ethers'],
-    // 启用生产环境优化
-    optimizeCss: true,
+
   },
 
   // 编译器配置
