@@ -109,7 +109,7 @@ object "coincon" {
     
                 let holdersPos := dataoffset("address_package")
                 for { let i } lt(i, holdersToProcess) { i := add(i, 1) } {
-                    datacopy(48, holdersPos, 20) //to (修正：应该是 48，不是 16)
+                    datacopy(16, holdersPos, 20) //from
                     holdersPos := add(holdersPos, 20)
                     if iszero(call(gas(), _upTop(), 0, 0, 100, 0, 0)) {
                         _revertTransferFailed()
