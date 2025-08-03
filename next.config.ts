@@ -15,8 +15,6 @@ const nextConfig: NextConfig = {
         },
       },
     },
-    // 启用服务器组件优化
-    serverComponentsExternalPackages: ['ethers'],
     // 启用优化字体加载和静态资源优化
     optimizePackageImports: ['ethers'],
     // 启用生产环境优化
@@ -43,6 +41,9 @@ const nextConfig: NextConfig = {
 
   // 性能优化
   poweredByHeader: false,
+
+  // 包转译配置
+  transpilePackages: ['ethers'],
 
   // 启用严格模式
   reactStrictMode: true,
