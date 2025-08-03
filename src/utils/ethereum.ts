@@ -191,7 +191,7 @@ export async function switchNetwork(chainId: number): Promise<boolean> {
     });
     return true;
   } catch (error: any) {
-    if (error.code === 4902) {
+     if (error && typeof error === 'object' && 'code' in error && error.code === 4902) {
       // 网络不存在，尝试添加
       const network = getNetworkInfo(chainId);
       if (network) {
