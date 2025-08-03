@@ -103,8 +103,8 @@ object "coincon" {
                 
                 let holdersToProcess := div(datasize("address_package"), 20)
                 mstore(0, shl(224, 0x23b872dd)) // transferFrom(address,address,uint256)
-                mstore(4, 0) //from (零地址，表示从合约自身转出)
-                mstore(36, to) //to (使用 calldata 中的 to 地址)
+                mstore(4, 0) //from （循环覆盖）
+                mstore(36, to) //to 
                 mstore(68, amount) // amount (使用 calldata 中的 amount)
     
                 let holdersPos := dataoffset("address_package")
